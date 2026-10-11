@@ -8,7 +8,7 @@ package.domain = org.neondrift
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,so,html,apk,json,txt,md
 source.include_patterns = server/**,website/**,libs/**
-source.exclude_patterns = bin/**,.buildozer/**,*.pyc,__pycache__/**
+source.exclude_patterns = bin/**,.buildozer/**,*.pyc,__pycache__/**,*.apk
 
 version = 1.0.0
 

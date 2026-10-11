@@ -1,0 +1,5 @@
+website/apk/*.apk
+bin/
+.buildozer/
+*.pyc
+__pycache__/
