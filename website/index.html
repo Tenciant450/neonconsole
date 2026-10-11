@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b0f14">
+<title>NEON DRIFT · 战术射击</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #05070c; --red: #dc2e2b; --gold: #f5b823;
+    --cyan: #2ee0ff; --green: #2ee07a; --text: #d0e0f0;
+    --muted: #5a6a7a; --line: rgba(46,224,255,0.15);
+    --panel: rgba(11,15,20,0.85);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow-x: hidden; scroll-behavior: smooth; }
+  body {
+    font-family: "Rajdhani", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  #bg-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; opacity: 0.85; }
+  .scanlines {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    background: repeating-linear-gradient(0deg,
+      rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 1px,
+      transparent 1px, transparent 3px);
+    opacity: 0.3;
+  }
+  .vignette {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    background: radial-gradient(ellipse at center,
+      transparent 0%, transparent 40%, rgba(0,0,0,0.7) 100%);
+  }
+  .content {
+    position: relative; z-index: 2;
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+  }
+
+  /* ============ 顶栏 ============ */
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 28px; border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(8px); background: rgba(5,7,12,0.6);
+    position: sticky; top: 0; z-index: 10;
+    flex-shrink: 0;
+  }
+  .brand {
+    font-family: "Orbitron", sans-serif; font-weight: 900;
+    font-size: 17px; letter-spacing: 4px; color: var(--red);
+    text-shadow: 0 0 12px rgba(220,46,43,0.6); cursor: pointer;
+  }
+  .nav { display: flex; gap: 18px; align-items: center; font-size: 13px; letter-spacing: 2px; }
+  .nav a { color: var(--muted); text-decoration: none; transition: color 0.2s; cursor: pointer; }
+  .nav a:hover { color: var(--cyan); }
+  .nav .user-badge {
+    display: none; align-items: center; gap: 8px;
+    padding: 5px 12px; border: 1px solid rgba(46,224,255,0.3);
+    border-radius: 2px; color: var(--cyan);
+  }
+  .nav .user-badge.on { display: inline-flex; }
+  .nav .user-badge .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green); box-shadow: 0 0 6px var(--green);
+  }
+  .nav button {
+    background: transparent; border: 1px solid rgba(220,46,43,0.4);
+    color: var(--red); padding: 6px 14px; cursor: pointer;
+    font-family: inherit; font-size: 13px; letter-spacing: 2px;
+    transition: all 0.2s;
+  }
+  .nav button:hover { background: rgba(220,46,43,0.1); box-shadow: 0 0 12px rgba(220,46,43,0.3); }
+
+  /* ============ Hero（自适应，不强制 100vh） ============ */
+  .hero {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; text-align: center;
+    padding: 24px 24px 16px;
+    min-height: 0;
+  }
+  .kicker {
+    font-family: "Orbitron", sans-serif; font-size: 11px;
+    letter-spacing: 6px; color: var(--cyan); margin-bottom: 22px;
+  }
+  .kicker::before, .kicker::after {
+    content: ""; display: inline-block; width: 24px; height: 1px;
+    background: var(--cyan); vertical-align: middle; margin: 0 12px;
+    box-shadow: 0 0 6px var(--cyan);
+  }
+  h1 {
+    font-family: "Orbitron", sans-serif; font-weight: 900;
+    font-size: clamp(44px, 10vw, 128px); letter-spacing: 4px;
+    line-height: 0.95; color: #fff; position: relative;
+    margin-bottom: 20px;
+    text-shadow: 0 0 20px rgba(220,46,43,0.6), 0 0 60px rgba(220,46,43,0.3);
+  }
+  h1.glitch::before, h1.glitch::after {
+    content: attr(data-text); position: absolute; top: 0; left: 0;
+    width: 100%; overflow: hidden; pointer-events: none;
+  }
+  h1.glitch::before { color: var(--cyan); z-index: -1; animation: glitch1 3s infinite steps(1); opacity: 0.7; }
+  h1.glitch::after { color: var(--gold); z-index: -2; animation: glitch2 2.3s infinite steps(1); opacity: 0.7; }
+  @keyframes glitch1 {
+    0%,90%,100% { transform: translate(0,0); }
+    92% { transform: translate(-3px,1px); } 94% { transform: translate(2px,-1px); }
+    96% { transform: translate(-1px,2px); } 98% { transform: translate(1px,-2px); }
+  }
+  @keyframes glitch2 {
+    0%,88%,100% { transform: translate(0,0); }
+    90% { transform: translate(3px,-1px); } 92% { transform: translate(-2px,1px); }
+    94% { transform: translate(1px,2px); } 96% { transform: translate(-1px,-2px); }
+  }
+  .tagline {
+    font-size: clamp(12px, 1.8vw, 15px); letter-spacing: 4px;
+    color: var(--muted); margin-bottom: 36px;
+  }
+  .cta-zone {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 12px; justify-content: center;
+    min-height: 130px;
+  }
+  .detect-status {
+    font-size: 13px; letter-spacing: 3px; color: var(--cyan);
+    min-height: 18px; margin-bottom: 4px;
+  }
+  .detect-status.dots::after { content: ""; display: inline-block; animation: dots 1.4s infinite steps(4); }
+  @keyframes dots { 0%{content:"";} 25%{content:".";} 50%{content:"..";} 75%{content:"...";} }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 10px; padding: 15px 44px;
+    font-family: "Orbitron", sans-serif; font-size: 13px;
+    font-weight: 700; letter-spacing: 3px; color: #05070c;
+    background: linear-gradient(135deg, #f5b823 0%, #dc2e2b 100%);
+    border: none; border-radius: 2px; text-decoration: none;
+    cursor: pointer; position: relative; overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(245,184,35,0.4), 0 8px 32px rgba(220,46,43,0.4);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .btn::before {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.4) 50%, transparent 70%);
+    transform: translateX(-100%); animation: sweep 3s infinite;
+  }
+  @keyframes sweep { 0% { transform: translateX(-100%); } 60% { transform: translateX(100%); } 100% { transform: translateX(100%); } }
+  .btn:hover { transform: translateY(-2px); }
+  .btn:active { transform: translateY(0) scale(0.98); }
+  .btn.secondary {
+    background: transparent; color: var(--cyan);
+    border: 1px solid rgba(46,224,255,0.4); box-shadow: none;
+    font-size: 12px; padding: 11px 32px;
+  }
+  .btn.secondary::before { display: none; }
+  .btn.secondary:hover { background: rgba(46,224,255,0.05); }
+  .btn.small { padding: 8px 18px; font-size: 11px; letter-spacing: 2px; box-shadow: none; }
+  .btn.small::before { display: none; }
+  .hidden { display: none !important; }
+
+  /* ============ 弹窗 ============ */
+  .modal-mask {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.78); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px; overflow-y: auto;
+  }
+  .modal-mask.on { display: flex; }
+  .modal {
+    width: 100%; max-width: 440px; background: var(--panel);
+    border: 1px solid rgba(46,224,255,0.25); border-top: 3px solid var(--red);
+    box-shadow: 0 0 60px rgba(220,46,43,0.2), 0 20px 60px rgba(0,0,0,0.8);
+    padding: 26px; position: relative;
+    margin: auto;
+    max-height: 92vh; overflow-y: auto;
+  }
+  .modal.wide { max-width: 560px; }
+  .modal .close-x {
+    position: absolute; top: 12px; right: 16px;
+    background: none; border: none; color: var(--muted);
+    font-size: 22px; cursor: pointer; line-height: 1;
+    z-index: 2;
+  }
+  .modal .close-x:hover { color: var(--red); }
+  .modal-title {
+    font-family: "Orbitron", sans-serif; font-weight: 700;
+    font-size: 18px; letter-spacing: 3px; color: #fff;
+    margin-bottom: 20px; padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .modal-title .kicker-mini {
+    display: block; font-size: 10px; letter-spacing: 4px;
+    color: var(--red); margin-bottom: 6px; font-weight: 500;
+  }
+
+  /* 登录 tabs / 字段 */
+  .tabs { display: flex; margin-bottom: 22px; }
+  .tabs button {
+    flex: 1; padding: 12px 0; background: transparent;
+    border: 1px solid rgba(46,224,255,0.15); color: var(--muted);
+    font-family: inherit; font-size: 13px; letter-spacing: 3px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .tabs button.on { color: var(--cyan); border-color: var(--cyan); background: rgba(46,224,255,0.05); }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 11px; letter-spacing: 2px; color: var(--muted); margin-bottom: 6px; }
+  .field input {
+    width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(46,224,255,0.2); color: var(--text);
+    font-family: inherit; font-size: 14px; outline: none; transition: border-color 0.2s;
+  }
+  .field input:focus { border-color: var(--cyan); box-shadow: 0 0 12px rgba(46,224,255,0.2); }
+  .field.hidden-field { display: none; }
+  .msg {
+    font-size: 12px; padding: 10px 12px; margin-bottom: 14px;
+    border-left: 2px solid var(--cyan); background: rgba(46,224,255,0.05);
+    display: none;
+  }
+  .msg.on { display: block; }
+  .msg.err { border-color: var(--red); color: #ff8080; background: rgba(220,46,43,0.08); }
+  .msg.ok  { border-color: var(--green); color: #80ffb0; background: rgba(46,224,112,0.08); }
+
+  /* 如何游玩：步骤 */
+  .step-mini {
+    display: flex; gap: 14px; padding: 12px 0;
+    border-bottom: 1px solid rgba(46,224,255,0.08);
+  }
+  .step-mini:last-of-type { border-bottom: none; }
+  .step-mini .num {
+    font-family: "Orbitron", sans-serif; font-size: 22px;
+    font-weight: 900; color: var(--cyan); opacity: 0.7;
+    min-width: 36px; line-height: 1.4;
+  }
+  .step-mini .body { flex: 1; }
+  .step-mini .t {
+    font-family: "Orbitron", sans-serif; font-size: 13px;
+    letter-spacing: 2px; color: #fff; margin-bottom: 6px;
+  }
+  .step-mini .d { font-size: 13px; color: #a8b8c8; line-height: 1.6; }
+  .step-mini .d b { color: var(--cyan); }
+  .tip-mini {
+    margin-top: 14px; padding-top: 12px;
+    border-top: 1px dashed rgba(46,224,255,0.15);
+  }
+  .tip-mini li {
+    list-style: none; padding: 5px 0 5px 20px; position: relative;
+    font-size: 12.5px; color: #a8b8c8;
+  }
+  .tip-mini li::before {
+    content: "▸"; position: absolute; left: 2px;
+    color: var(--cyan); font-weight: bold;
+  }
+
+  /* 连接服务器：地址框 */
+  .server-addr {
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 15px; color: var(--cyan);
+    word-break: break-all;
+    padding: 16px 18px;
+    background: rgba(0,0,0,0.4);
+    border: 1px dashed rgba(46,224,255,0.3);
+    cursor: pointer; transition: all 0.2s;
+    display: flex; justify-content: space-between;
+    align-items: center; gap: 12px;
+  }
+  .server-addr:hover {
+    border-color: var(--cyan);
+    box-shadow: 0 0 20px rgba(46,224,255,0.2);
+  }
+  .server-addr.copied {
+    border-color: var(--green); border-style: solid; color: var(--green);
+  }
+  .server-addr .hint {
+    font-size: 11px; color: var(--muted);
+    letter-spacing: 2px; white-space: nowrap;
+  }
+  .server-addr.copied .hint { color: var(--green); }
+  .server-desc {
+    margin-top: 14px; font-size: 13px; color: var(--muted);
+    line-height: 1.7;
+  }
+
+  /* ============ 玩家面板 ============ */
+  .dashboard {
+    padding: 32px 28px 80px;
+    max-width: 1100px; margin: 0 auto; width: 100%;
+    display: none;
+    flex: 1;
+  }
+  .dashboard.on { display: block; }
+  .dash-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 22px 26px; margin-bottom: 22px;
+    background: var(--panel); border: 1px solid rgba(46,224,255,0.15);
+    border-left: 3px solid var(--red);
+    gap: 12px; flex-wrap: wrap;
+  }
+  .dash-head .info h2 {
+    font-family: "Orbitron", sans-serif; font-size: 24px;
+    letter-spacing: 3px; color: #fff; margin-bottom: 4px;
+  }
+  .dash-head .info .sub { font-size: 12px; letter-spacing: 3px; color: var(--muted); }
+  .dash-head .info .uid { font-family: "Orbitron", sans-serif; font-size: 11px; color: var(--cyan); margin-top: 6px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; }
+  @media (max-width: 900px) { .grid-3 { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid rgba(46,224,255,0.12); padding: 18px; min-height: 180px; }
+  .panel-title {
+    font-family: "Orbitron", sans-serif; font-size: 11px;
+    letter-spacing: 3px; color: var(--red); margin-bottom: 14px;
+    padding-bottom: 10px; border-bottom: 1px solid var(--line);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .panel-title .count { color: var(--cyan); font-size: 11px; }
+  .list-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 18px 0; }
+  .list-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; margin-bottom: 6px;
+    background: rgba(0,0,0,0.3); border-left: 2px solid var(--cyan);
+    font-size: 13px;
+  }
+  .list-item.offline { border-left-color: #3a4a5a; opacity: 0.6; }
+  .list-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list-item .status { font-size: 10px; letter-spacing: 1px; color: var(--muted); }
+  .list-item .status.on { color: var(--green); }
+  .list-item .actions { display: flex; gap: 6px; }
+  .list-item .actions button {
+    padding: 4px 10px; font-size: 10px; letter-spacing: 1px;
+    background: transparent; cursor: pointer; font-family: inherit;
+    border: 1px solid rgba(46,224,255,0.3); color: var(--cyan); transition: all 0.15s;
+  }
+  .list-item .actions button:hover { background: rgba(46,224,255,0.1); }
+  .list-item .actions button.danger { border-color: rgba(220,46,43,0.4); color: var(--red); }
+  .list-item .actions button.accept { border-color: rgba(46,224,112,0.4); color: var(--green); }
+  .add-friend { display: flex; gap: 8px; margin-bottom: 14px; }
+  .add-friend input {
+    flex: 1; padding: 8px 12px; background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(46,224,255,0.2); color: var(--text);
+    font-family: inherit; font-size: 13px; outline: none;
+  }
+  .add-friend input:focus { border-color: var(--cyan); }
+  .mail-item {
+    padding: 12px; margin-bottom: 8px; background: rgba(0,0,0,0.3);
+    border-left: 2px solid var(--gold); font-size: 12px; cursor: pointer;
+  }
+  .mail-item .m-title { color: var(--gold); font-weight: 600; margin-bottom: 4px; }
+  .mail-item .m-body { color: var(--muted); line-height: 1.5; }
+  .mail-item .m-meta { font-size: 10px; color: var(--muted); margin-top: 6px; }
+  .mail-item.unread { border-left-color: var(--red); }
+  .mail-item.unread .m-title { color: var(--red); }
+
+  /* ============ 底部连接条 ============ */
+  .conn-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    padding: 7px 18px; background: rgba(5,7,12,0.95);
+    border-top: 1px solid var(--line); font-size: 11px; letter-spacing: 2px;
+    display: flex; justify-content: space-between; align-items: center;
+    z-index: 50; font-family: "Orbitron", sans-serif;
+  }
+  .conn-bar .left { display: flex; align-items: center; gap: 10px; }
+  .conn-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: #666; transition: all 0.3s; }
+  .conn-bar .dot.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .conn-bar .dot.err { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+  /* ============ 页脚 ============ */
+  footer {
+    padding: 12px 20px 44px;
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  footer .accent { color: var(--red); }
+
+  /* ============ 响应式 ============ */
+  @media (max-width: 640px) {
+    header { padding: 12px 14px; flex-wrap: wrap; gap: 8px; }
+    .brand { font-size: 14px; letter-spacing: 2px; }
+    .nav { gap: 10px; font-size: 11px; flex-wrap: wrap; }
+    .nav button { padding: 4px 10px; font-size: 11px; }
+    .hero { padding: 16px 14px 12px; }
+    h1 { font-size: clamp(40px, 16vw, 72px) !important; margin-bottom: 14px; }
+    .kicker { font-size: 10px; letter-spacing: 4px; margin-bottom: 16px; }
+    .kicker::before, .kicker::after { width: 16px; margin: 0 8px; }
+    .tagline { margin-bottom: 26px; }
+    .cta-zone { min-height: 110px; gap: 10px; }
+    .btn { padding: 13px 34px; font-size: 12px; letter-spacing: 2px; }
+    .btn.secondary { padding: 10px 24px; font-size: 11px; }
+    .dashboard { padding: 16px 12px 70px; }
+    .dash-head { padding: 16px 18px; margin-bottom: 16px; }
+    .dash-head .info h2 { font-size: 18px; }
+    .modal { padding: 22px 18px; }
+    .server-addr { padding: 12px 14px; font-size: 13px; }
+  }
+
+  /* 特别矮的屏（iPhone SE 之类的 568px 高度） */
+  @media (max-height: 640px) {
+    .hero { padding: 12px 16px 8px; }
+    h1 { font-size: clamp(36px, 12vh, 80px) !important; margin-bottom: 10px; }
+    .kicker { margin-bottom: 12px; }
+    .tagline { margin-bottom: 20px; font-size: 12px; }
+    .cta-zone { min-height: 90px; gap: 8px; }
+    .btn { padding: 11px 30px; font-size: 12px; }
+    footer { padding: 8px 20px 40px; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+
+<div class="content">
+
+  <header>
+    <div class="brand" onclick="scrollTo({top:0,behavior:'smooth'})">NEON DRIFT</div>
+    <nav class="nav">
+      <a onclick="openHowto()">如何游玩</a>
+      <a onclick="openConnect()">连接服务器</a>
+      <div class="user-badge" id="userBadge">
+        <span class="dot"></span>
+        <span id="userBadgeName">—</span>
+      </div>
+      <button id="loginBtn" onclick="openAuth()">登录 / 注册</button>
+      <button id="logoutBtn" class="hidden" onclick="doLogout()">登出</button>
+    </nav>
+  </header>
+
+  <section class="hero" id="heroSection">
+    <div class="kicker">第一赛季 · 现已开放</div>
+    <h1 class="glitch" data-text="NEON DRIFT">NEON DRIFT</h1>
+    <div class="tagline">战术射击 · 竞技体验 · 免费畅玩</div>
+
+    <div class="cta-zone" id="download">
+      <div class="detect-status dots" id="status">正在检测客户端</div>
+      <a class="btn hidden" id="downloadBtn" href="/apk/neondrift.apk" download>
+        ▶ 下载客户端（Release 1.0.0）
+      </a>
+      <a class="btn secondary hidden" id="retryBtn" onclick="tryLaunch()">
+        启动客户端
+      </a>
+    </div>
+  </section>
+
+  <section class="dashboard" id="dashboard">
+    <div class="dash-head">
+      <div class="info">
+        <h2 id="dashName">—</h2>
+        <div class="sub">玩家档案</div>
+        <div class="uid" id="dashUid">UID: —</div>
+      </div>
+      <div>
+        <button class="btn secondary small" onclick="refreshAll()">↻ 刷新</button>
+      </div>
+    </div>
+
+    <div class="grid-3">
+      <div class="panel">
+        <div class="panel-title"><span>好友</span><span class="count" id="friendsCount">0</span></div>
+        <div class="add-friend">
+          <input id="addFriendInput" placeholder="输入对方昵称…"
+                 onkeydown="if(event.key==='Enter')addFriend()">
+          <button class="btn small" onclick="addFriend()">+</button>
+        </div>
+        <div id="friendsList"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title"><span>好友请求</span><span class="count" id="reqCount">0</span></div>
+        <div id="pendingList"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title"><span>邮件</span><span class="count" id="mailCount">0</span></div>
+        <div id="mailList"></div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- 如何游玩 -->
+<div class="modal-mask" id="howtoModal">
+  <div class="modal wide">
+    <button class="close-x" onclick="closeHowto()">×</button>
+    <div class="modal-title">
+      <span class="kicker-mini">GETTING STARTED</span>
+      如何游玩
+    </div>
+
+    <div class="step-mini">
+      <div class="num">01</div>
+      <div class="body">
+        <div class="t">下载客户端</div>
+        <div class="d">
+          点击首页的「下载客户端」按钮，安装 APK 到<b>安卓</b>设备。<b>PC</b> 端暂未编译，但可通过QQ:<b>1018861459</b>获取源码，直接在<b>Godot Engine 4.7+</b>上运行（Android端亦然）。
+        </div>
+      </div>
+    </div>
+
+    <div class="step-mini">
+      <div class="num">02</div>
+      <div class="body">
+        <div class="t">注册账号</div>
+        <div class="d">
+          打开客户端，用「注册」标签创建新账号。<b>UID 至少 6 位</b>，
+          密码至少 4 位。该账号在官网与游戏内通用。
+        </div>
+      </div>
+    </div>
+
+    <div class="step-mini">
+      <div class="num">03</div>
+      <div class="body">
+        <div class="t">进入战场</div>
+        <div class="d">
+          登录后选择模式：<b>AI 对局</b>、<b>房间对战</b> 或 <b>大逃杀</b>。
+          挑好你的英雄，点击开始。
+        </div>
+      </div>
+    </div>
+
+    <ul class="tip-mini">
+      <li>支持 PC（Windows / macOS / Linux）与 Android 双端</li>
+      <li>PC 键位：WASD 移动、空格跳跃、Shift 滑铲、右键开镜、左键开火</li>
+      <li>移动端：左摇杆移动、右侧滑动视角、屏幕按钮射击 / 技能 / 拾取</li>
+      <li>每位英雄拥有独立的战术技能（Q）与终极技能（X）</li>
+      <li>留意缩圈提示与空投位置，圈外会持续掉血</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 连接服务器 -->
+<div class="modal-mask" id="connectModal">
+  <div class="modal">
+    <button class="close-x" onclick="closeConnect()">×</button>
+    <div class="modal-title">
+      <span class="kicker-mini">OFFICIAL SERVER</span>
+      连接官方服务器
+    </div>
+
+    <div class="server-addr" id="serverAddr" onclick="copyServer()">
+      <span id="serverText">wss://api.wowneon.dpdns.org</span>
+      <span class="hint" id="serverHint">点击复制</span>
+    </div>
+
+    <div class="server-desc">
+      在客户端登录界面的「服务器地址」一栏，粘贴上方地址即可连接官方服务器。
+    </div>
+  </div>
+</div>
+
+<!-- 登录 -->
+<div class="modal-mask" id="authModal">
+  <div class="modal">
+    <button class="close-x" onclick="closeAuth()">×</button>
+    <div class="tabs">
+      <button class="on" id="tabLogin" onclick="switchTab('login')">登录</button>
+      <button id="tabRegister" onclick="switchTab('register')">注册</button>
+    </div>
+    <div class="msg" id="authMsg"></div>
+    <div class="field">
+      <label>账号 UID（至少 6 位）</label>
+      <input id="inUid" placeholder="例如 admin001" autocomplete="username">
+    </div>
+    <div class="field hidden-field" id="fieldName">
+      <label>昵称</label>
+      <input id="inName" placeholder="你的游戏昵称" autocomplete="nickname">
+    </div>
+    <div class="field">
+      <label>密码（至少 4 位）</label>
+      <input id="inPw" type="password" autocomplete="current-password">
+    </div>
+    <div class="field hidden-field" id="fieldPw2">
+      <label>确认密码</label>
+      <input id="inPw2" type="password" autocomplete="new-password">
+    </div>
+    <button class="btn" style="width:100%" id="submitAuthBtn" onclick="submitAuth()">进入游戏</button>
+  </div>
+</div>
+
+<div class="conn-bar">
+  <div class="left">
+    <span class="dot" id="connDot"></span>
+    <span id="connText">未连接</span>
+  </div>
+  <div id="connServer">api.wowneon.dpdns.org</div>
+</div>
+
+<script>
+/* ============================================================
+   配置
+   ============================================================ */
+const WS_URL = "wss://api.wowneon.dpdns.org";
+const SERVER_ADDR = "wss://api.wowneon.dpdns.org";
+const SCHEME = "neondrift://open";
+const LAUNCH_TIMEOUT = 1800;
+
+/* ============================================================
+   弹窗控制
+   ============================================================ */
+function openHowto()   { document.getElementById("howtoModal").classList.add("on"); }
+function closeHowto()  { document.getElementById("howtoModal").classList.remove("on"); }
+function openConnect() { document.getElementById("connectModal").classList.add("on"); }
+function closeConnect(){ document.getElementById("connectModal").classList.remove("on"); }
+
+function copyServer() {
+  const box = document.getElementById("serverAddr");
+  const hint = document.getElementById("serverHint");
+  const done = () => {
+    box.classList.add("copied");
+    hint.textContent = "已复制 ✓";
+    setTimeout(() => {
+      box.classList.remove("copied");
+      hint.textContent = "点击复制";
+    }, 1500);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(SERVER_ADDR).then(done).catch(() => {
+      fallbackCopy(SERVER_ADDR); done();
+    });
+  } else {
+    fallbackCopy(SERVER_ADDR); done();
+  }
+}
+function fallbackCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand("copy"); } catch {}
+  document.body.removeChild(ta);
+}
+
+/* ============================================================
+   粒子背景
+   ============================================================ */
+(function initCanvas() {
+  const canvas = document.getElementById("bg-canvas");
+  const ctx = canvas.getContext("2d");
+  let W, H, particles = [];
+  const COUNT = Math.min(80, Math.floor(window.innerWidth / 18));
+  function resize() {
+    W = canvas.width = window.innerWidth * devicePixelRatio;
+    H = canvas.height = window.innerHeight * devicePixelRatio;
+    canvas.style.width = window.innerWidth + "px";
+    canvas.style.height = window.innerHeight + "px";
+  }
+  function mk() {
+    return {
+      x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - 0.5) * 0.3 * devicePixelRatio,
+      vy: (Math.random() - 0.5) * 0.3 * devicePixelRatio,
+      r: (Math.random() * 1.6 + 0.4) * devicePixelRatio,
+      hue: Math.random() < 0.15 ? 0 : 190,
+      a: Math.random() * 0.5 + 0.15,
+    };
+  }
+  function init() {
+    resize(); particles = [];
+    for (let i = 0; i < COUNT; i++) particles.push(mk());
+  }
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const a = particles[i], b = particles[j];
+        const dx = a.x - b.x, dy = a.y - b.y;
+        const d2 = dx * dx + dy * dy;
+        const maxD = 140 * devicePixelRatio;
+        if (d2 < maxD * maxD) {
+          ctx.strokeStyle = `rgba(46,224,255,${(1-Math.sqrt(d2)/maxD)*0.08})`;
+          ctx.lineWidth = devicePixelRatio * 0.6;
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        }
+      }
+    }
+    for (const p of particles) {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > W) p.vx *= -1;
+      if (p.y < 0 || p.y > H) p.vy *= -1;
+      ctx.fillStyle = p.hue === 0
+        ? `rgba(220,46,43,${p.a})` : `rgba(46,224,255,${p.a})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+    }
+    requestAnimationFrame(draw);
+  }
+  window.addEventListener("resize", init);
+  init(); draw();
+})();
+
+/* ============================================================
+   Deeplink 检测
+   ============================================================ */
+let launching = false;
+function tryLaunch() {
+  if (launching) return;
+  launching = true;
+  document.getElementById("status").textContent = "正在启动客户端";
+  document.getElementById("downloadBtn").classList.add("hidden");
+  document.getElementById("retryBtn").classList.add("hidden");
+  const start = Date.now();
+  const iframe = document.createElement("iframe");
+  iframe.style.display = "none";
+  iframe.src = SCHEME;
+  document.body.appendChild(iframe);
+  setTimeout(() => {
+    iframe.remove();
+    if (Date.now() - start < LAUNCH_TIMEOUT + 300) showDownload();
+  }, LAUNCH_TIMEOUT);
+}
+function showDownload() {
+  launching = false;
+  document.getElementById("status").textContent = "未检测到客户端";
+  document.getElementById("status").classList.remove("dots");
+  document.getElementById("downloadBtn").classList.remove("hidden");
+  document.getElementById("retryBtn").classList.remove("hidden");
+}
+window.addEventListener("load", () => setTimeout(tryLaunch, 800));
+
+/* ============================================================
+   视图
+   ============================================================ */
+function showHero() {
+  document.getElementById("heroSection").style.display = "";
+  document.getElementById("dashboard").classList.remove("on");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function showDashboard() {
+  document.getElementById("heroSection").style.display = "none";
+  document.getElementById("dashboard").classList.add("on");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+/* ============================================================
+   WebSocket
+   ============================================================ */
+let ws = null, reconnectTimer = null;
+let currentUser = null;
+let pendingAuthAction = null;
+
+function setConn(state, text) {
+  document.getElementById("connDot").className = "dot " + (state || "");
+  document.getElementById("connText").textContent = text;
+}
+function wsConnect() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+  setConn("", "连接中…");
+  try { ws = new WebSocket(WS_URL); } catch { setConn("err", "地址错误"); return; }
+  ws.onopen = () => {
+    setConn("on", "已连接");
+    if (currentUser && pendingAuthAction == null) {
+      pendingAuthAction = "login";
+      wsSend({ type: "login", uid: currentUser.uid,
+               password: sessionStorage.getItem("nd_pw") || "" });
+    }
+  };
+  ws.onclose = () => { setConn("", "已断开"); ws = null; scheduleReconnect(); };
+  ws.onerror = () => setConn("err", "错误");
+  ws.onmessage = e => { try { handleMessage(JSON.parse(e.data)); } catch {} };
+}
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  reconnectTimer = setTimeout(() => { reconnectTimer = null; wsConnect(); }, 3000);
+}
+function wsSend(obj) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+  ws.send(JSON.stringify(obj));
+  return true;
+}
+
+/* ============================================================
+   消息处理
+   ============================================================ */
+function handleMessage(d) {
+  switch (d.type) {
+    case "auth_ok":
+      currentUser = { uid: d.uid, name: d.name };
+      localStorage.setItem("nd_uid", d.uid);
+      sessionStorage.setItem("nd_pw", sessionStorage.getItem("nd_pending_pw") || "");
+      sessionStorage.removeItem("nd_pending_pw");
+      authMsg("登录成功", "ok");
+      setTimeout(() => {
+        closeAuth(); updateUserUI(); showDashboard();
+        pendingAuthAction = null;
+        wsSend({ type: "friend_list" });
+        wsSend({ type: "mail_list" });
+      }, 400);
+      break;
+    case "auth_failed":
+      authMsg(d.reason || "登录失败", "err");
+      pendingAuthAction = null;
+      break;
+    case "friend_list":
+      renderFriends(d.friends || [], d.pending_in || [], d.pending_out || []);
+      break;
+    case "mail_list":
+      renderMails(d.mails || []);
+      break;
+    case "friend_request":
+      flashStatus(`★ ${d.from_name} 请求加你为好友`);
+      wsSend({ type: "friend_list" });
+      break;
+    case "room_invite":
+      flashStatus(`★ ${d.from_name} 邀请你加入房间`);
+      break;
+    case "error":
+      authMsg(d.msg || "错误", "err");
+      break;
+    case "admin_cmd":
+      if (d.cmd === "broadcast") flashStatus(`📢 ${d.msg}`);
+      break;
+  }
+}
+
+/* ============================================================
+   登录 / 注册
+   ============================================================ */
+let authTab = "login";
+function openAuth() {
+  if (currentUser) { showDashboard(); refreshAll(); return; }
+  document.getElementById("authModal").classList.add("on");
+  switchTab("login"); authMsg("", "");
+  document.getElementById("inUid").focus();
+}
+function closeAuth() { document.getElementById("authModal").classList.remove("on"); }
+function switchTab(tab) {
+  authTab = tab;
+  document.getElementById("tabLogin").classList.toggle("on", tab === "login");
+  document.getElementById("tabRegister").classList.toggle("on", tab === "register");
+  document.getElementById("fieldName").classList.toggle("hidden-field", tab !== "register");
+  document.getElementById("fieldPw2").classList.toggle("hidden-field", tab !== "register");
+  document.getElementById("submitAuthBtn").textContent =
+    tab === "login" ? "进入游戏" : "创建账号";
+  authMsg("", "");
+}
+function authMsg(text, kind) {
+  const el = document.getElementById("authMsg");
+  if (!text) { el.className = "msg"; el.textContent = ""; return; }
+  el.className = "msg on " + (kind || "");
+  el.textContent = text;
+}
+function submitAuth() {
+  const uid = document.getElementById("inUid").value.trim();
+  const pw = document.getElementById("inPw").value;
+  const name = document.getElementById("inName").value.trim();
+  const pw2 = document.getElementById("inPw2").value;
+
+  if (!uid || !pw) { authMsg("请填写账号和密码", "err"); return; }
+  if (authTab === "register") {
+    if (uid.length < 6) { authMsg("UID 至少 6 位", "err"); return; }
+    if (pw.length < 4) { authMsg("密码至少 4 位", "err"); return; }
+    if (pw !== pw2) { authMsg("两次密码不一致", "err"); return; }
+    if (!name) { authMsg("请填写昵称", "err"); return; }
+  }
+  sessionStorage.setItem("nd_pending_pw", pw);
+
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    pendingAuthAction = authTab;
+    authMsg("正在连接服务器…", "");
+    wsConnect();
+    const wait = setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        clearInterval(wait);
+        if (pendingAuthAction === "login") wsSend({ type: "login", uid, password: pw });
+        else wsSend({ type: "register", uid, password: pw, name });
+      }
+    }, 100);
+    return;
+  }
+  authMsg("验证中…", "");
+  if (authTab === "login") wsSend({ type: "login", uid, password: pw });
+  else wsSend({ type: "register", uid, password: pw, name });
+}
+
+/* ============================================================
+   UI
+   ============================================================ */
+function updateUserUI() {
+  const badge = document.getElementById("userBadge");
+  const nameEl = document.getElementById("userBadgeName");
+  const loginBtn = document.getElementById("loginBtn");
+  const logoutBtn = document.getElementById("logoutBtn");
+  if (currentUser) {
+    badge.classList.add("on");
+    nameEl.textContent = currentUser.name || currentUser.uid;
+    loginBtn.classList.add("hidden");
+    logoutBtn.classList.remove("hidden");
+    document.getElementById("dashName").textContent = currentUser.name || currentUser.uid;
+    document.getElementById("dashUid").textContent = "UID: " + currentUser.uid;
+  } else {
+    badge.classList.remove("on");
+    loginBtn.classList.remove("hidden");
+    logoutBtn.classList.add("hidden");
+  }
+}
+function doLogout() {
+  currentUser = null;
+  localStorage.removeItem("nd_uid");
+  sessionStorage.removeItem("nd_pw");
+  sessionStorage.removeItem("nd_pending_pw");
+  updateUserUI(); showHero();
+  if (ws) { try { ws.close(); } catch {} ws = null; }
+  setConn("", "已断开");
+  setTimeout(wsConnect, 500);
+}
+
+function renderFriends(friends, pendingIn, pendingOut) {
+  document.getElementById("friendsCount").textContent = friends.length;
+  const list = document.getElementById("friendsList");
+  list.innerHTML = friends.length
+    ? friends.map(f => `
+        <div class="list-item ${f.online ? '' : 'offline'}">
+          <div class="name">${esc(f.name)}</div>
+          <div class="status ${f.online ? 'on' : ''}">
+            ${f.online ? (f.room_id ? '游戏中' : '在线') : '离线'}
+          </div>
+          <div class="actions">
+            <button class="danger" onclick="removeFriend('${esc(f.id)}')">✕</button>
+          </div>
+        </div>`).join("")
+    : '<div class="list-empty">还没有好友，试试添加对方昵称</div>';
+
+  const pending = [...pendingIn, ...pendingOut];
+  document.getElementById("reqCount").textContent = pending.length;
+  const plist = document.getElementById("pendingList");
+  plist.innerHTML = pending.length
+    ? pending.map(p => {
+        const isIn = pendingIn.some(x => x.id === p.id);
+        return `
+          <div class="list-item">
+            <div class="name">${isIn ? '← ' : '→ '}${esc(p.name)}</div>
+            <div class="actions">
+              ${isIn ? `
+                <button class="accept" onclick="acceptFriend('${esc(p.id)}')">接受</button>
+                <button class="danger" onclick="rejectFriend('${esc(p.id)}')">拒绝</button>
+              ` : `<span class="status">等待对方接受</span>`}
+            </div>
+          </div>`;
+      }).join("")
+    : '<div class="list-empty">无待处理请求</div>';
+}
+function renderMails(mails) {
+  document.getElementById("mailCount").textContent = mails.length;
+  const list = document.getElementById("mailList");
+  list.innerHTML = mails.length
+    ? mails.slice().reverse().map(m => `
+        <div class="mail-item ${m.read ? '' : 'unread'}"
+             onclick="markMailRead('${esc(m.id)}')">
+          <div class="m-title">${esc(m.title || '无标题')}</div>
+          <div class="m-body">${esc(m.body || '')}</div>
+          <div class="m-meta">发件人: ${esc(m.from || '?')}</div>
+        </div>`).join("")
+    : '<div class="list-empty">暂无邮件</div>';
+}
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+/* ============================================================
+   好友操作
+   ============================================================ */
+function addFriend() {
+  const input = document.getElementById("addFriendInput");
+  const name = input.value.trim();
+  if (!name) return;
+  wsSend({ type: "friend_request", name });
+  input.value = "";
+  flashStatus(`已发送好友请求：${name}`);
+}
+function acceptFriend(id) {
+  wsSend({ type: "friend_accept", from_id: id });
+  setTimeout(() => wsSend({ type: "friend_list" }), 300);
+}
+function rejectFriend(id) {
+  wsSend({ type: "friend_reject", from_id: id });
+  setTimeout(() => wsSend({ type: "friend_list" }), 300);
+}
+function removeFriend(id) {
+  if (!confirm("确定删除该好友？")) return;
+  wsSend({ type: "friend_remove", friend_id: id });
+  setTimeout(() => wsSend({ type: "friend_list" }), 300);
+}
+function markMailRead(id) {
+  wsSend({ type: "mail_read", mail_id: id });
+  setTimeout(() => wsSend({ type: "mail_list" }), 300);
+}
+function refreshAll() {
+  if (!currentUser) return;
+  wsSend({ type: "friend_list" });
+  wsSend({ type: "mail_list" });
+}
+
+let flashTimer = null;
+function flashStatus(text) {
+  const el = document.getElementById("connText");
+  const orig = el.textContent;
+  el.textContent = text;
+  if (flashTimer) clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { el.textContent = orig; }, 3000);
+}
+
+/* ============================================================
+   启动
+   ============================================================ */
+(function boot() {
+  wsConnect();
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") {
+      closeAuth(); closeHowto(); closeConnect();
+    }
+  });
+
+  ["authModal", "howtoModal", "connectModal"].forEach(id => {
+    document.getElementById(id).addEventListener("click", e => {
+      if (e.target.id === id) {
+        if (id === "authModal") closeAuth();
+        else if (id === "howtoModal") closeHowto();
+        else closeConnect();
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
